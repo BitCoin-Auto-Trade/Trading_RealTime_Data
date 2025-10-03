@@ -1,0 +1,9 @@
+# 환경변수
+.env
+
+# venv
+.venv/
+
+# 파이썬 패키지
+__pycache__/
+*.pyc

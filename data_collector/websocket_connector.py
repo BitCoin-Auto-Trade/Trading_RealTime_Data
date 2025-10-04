@@ -3,6 +3,7 @@ import json
 import time
 import websockets
 from typing import Callable
+
 from utils.logger_utils import setup_logger
 from data_collector.data_parser import DataParser
 

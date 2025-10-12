@@ -18,6 +18,10 @@ class WebSocketConnector:
         self.running = False
         self.start_time = 0
         self.parser = DataParser()
+        
+        # 통계용
+        self.trade_count = 0
+        self.orderbook_count = 0
     
     async def _connect(self):
         """연결"""
@@ -56,9 +60,34 @@ class WebSocketConnector:
                         # 스트림별로 파싱하여 전달
                         if "@depth" in stream_name:
                             parsed = self.parser.parse_order_book(raw_data)
+                            self.orderbook_count += 1
+                            
+                            # 호가창 로깅 (상위 3개만)
+                            bid_info = [(float(b[0]), float(b[1])) for b in parsed.bids[:3]]
+                            ask_info = [(float(a[0]), float(a[1])) for a in parsed.asks[:3]]
+                            
+                            self.logger.info(f"[ORDERBOOK #{self.orderbook_count}] "
+                                           f"매수 상위3: {bid_info} | "
+                                           f"매도 상위3: {ask_info}")
+                            
                             await on_message("orderbook", parsed)
+                            
                         elif "@aggTrade" in stream_name:
                             parsed = self.parser.parse_trade(raw_data)
+                            self.trade_count += 1
+                            
+                            # 체결 로깅
+                            price = float(parsed.price)
+                            quantity = float(parsed.quantity)
+                            amount_usdt = price * quantity
+                            side = "매도" if parsed.is_buyer_maker else "매수"
+                            
+                            self.logger.info(f"[TRADE #{self.trade_count}] "
+                                           f"{side} | "
+                                           f"가격: {price:,.2f} | "
+                                           f"수량: {quantity:.4f} | "
+                                           f"거래대금: {amount_usdt:,.0f} USDT")
+                            
                             await on_message("trade", parsed)
                         
                 except websockets.exceptions.ConnectionClosed:
@@ -77,4 +106,4 @@ class WebSocketConnector:
         self.running = False
         if self.websocket:
             await self.websocket.close()
-            self.logger.info("연결 종료")
+            self.logger.info(f"연결 종료 | 총 체결: {self.trade_count}개 | 총 호가창: {self.orderbook_count}개")

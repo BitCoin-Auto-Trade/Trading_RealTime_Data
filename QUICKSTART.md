@@ -6,48 +6,53 @@
 # 의존성 설치
 pip install -r requirements.txt
 
-# 환경 변수 설정
-cp .env.example .env
-# .env 파일 편집하여 API 키 입력
+# 환경 변수 설정 (선택사항)
+# .env 파일 생성하여 API 키 입력 (실제 거래 시 필요)
+echo "BINANCE_API_KEY=your_key_here" > .env
+echo "BINANCE_API_SECRET=your_secret_here" >> .env
 ```
 
 ## 실행
 
-### 1. 기존 버전 (V1)
 ```bash
+# 봇 시작
 python main.py
 ```
 
-### 2. 새로운 아키텍처 (V2 - 권장)
-```bash
-python main_v2.py
-```
+## 주요 기능
 
-## V1 vs V2 차이점
+| 컴포넌트 | 기능 |
+|----------|------|
+| 데이터 검증 | 중복, NULL, 순서 체크 |
+| 데이터 정규화 | VWAP, 대형 거래 감지, 호가 불균형 계산 |
+| Auto Reconnection | Exponential Backoff 재연결 |
+| 시장 상태 관리 | 가격 모멘텀, 거래량 급증 실시간 추적 |
+| 저장소 | SortedDict 시간 인덱싱 (O(log N)) |
+| 모니터링 | 구조화된 통계 및 로깅 |
 
-| 기능 | V1 | V2 |
-|------|----|----|
-| 데이터 검증 | ❌ | ✅ |
-| 데이터 정규화 | ❌ | ✅ |
-| Auto Reconnection | 기본 | 개선 (Exponential Backoff) |
-| 시장 상태 관리 | 간단 | 체계적 |
-| 저장소 | deque만 | Hot Storage (인덱싱) |
-| 모니터링 | 기본 로깅 | 구조화된 통계 |
+## 데이터 파이프라인
 
-## 새로운 아키텍처 주요 기능
-
-### 1. 데이터 파이프라인
+### 아키텍처
 ```python
 from core.data_pipeline import DataPipeline
 
+# 파이프라인 생성
 pipeline = DataPipeline(symbol="BTCUSDT")
 await pipeline.start()
 ```
 
-**플로우:**
+**처리 플로우:**
 ```
-WebSocket → Validator → Normalizer → Storage → StateManager
+WebSocket → Validator → Normalizer → Storage → StateManager → Callback
 ```
+
+**각 단계:**
+1. **WebSocket**: 바이낸스에서 실시간 데이터 수신
+2. **Validator**: 데이터 품질 검증 (중복, NULL, 순서)
+3. **Normalizer**: 지표 계산 (VWAP, 대형 거래, 호가 불균형)
+4. **Storage**: 고속 인메모리 저장 (시간 인덱싱)
+5. **StateManager**: 시장 상태 업데이트
+6. **Callback**: SignalEngine 등에 전달
 
 ### 2. 시장 상태 조회
 ```python
@@ -89,10 +94,17 @@ pipeline = DataPipeline(
 
 ### 설정 변경
 ```python
-# config/settings.py 수정
-MIN_TRADE_AMOUNT = 20000.0        # 대형거래 임계값
-PRICE_SPIKE_THRESHOLD = 0.002     # 가격 급변 임계값 (0.2%)
-IMBALANCE_THRESHOLD = 0.7         # 호가 불균형 임계값
+# config/settings.py에서 설정 조정
+from config.settings import Settings
+
+# 트레이딩 설정
+Settings.trading.min_trade_amount_usdt = 20000.0  # 대형거래 임계값
+Settings.trading.price_spike_threshold = 0.002     # 0.2% 가격 변화
+Settings.trading.imbalance_threshold = 0.7         # 호가 불균형
+
+# 데이터 설정
+Settings.data.hot_storage_max_trades = 20000       # 저장소 크기
+Settings.data.ws_reconnect_max_attempts = 20       # 최대 재연결 시도
 ```
 
 ## 테스트

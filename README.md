@@ -65,21 +65,60 @@
 
 ## 폴더 구조
 ```
-bitcoin-trading-bot/
+Trading_RealTime_Data/
 ├── config/
 │   └── settings.py              # 설정 및 임계값
 ├── core/
-│   ├── websocket_manager.py     # WebSocket 연결
-│   ├── data_processor.py        # 실시간 데이터 처리
-│   ├── signal_engine.py         # 시그널 생성
+│   ├── data_pipeline.py         # 통합 데이터 파이프라인 ✨ NEW
+│   ├── market_state_manager.py  # 시장 상태 관리 ✨ NEW
+│   ├── signal_engine_v1.py      # 시그널 생성
 │   └── order_executor.py        # 주문 실행
+├── data_collector/
+│   ├── websocket_connector.py   # WebSocket 연결 (V1)
+│   ├── websocket_connector_v2.py # 개선된 WebSocket ✨ NEW
+│   ├── data_parser.py           # 데이터 파싱
+│   ├── data_validator.py        # 데이터 검증 ✨ NEW
+│   └── data_normalizer.py       # 데이터 정규화 ✨ NEW
+├── storage/
+│   └── hot_storage.py           # 고속 인메모리 저장소 ✨ NEW
 ├── models/
-│   └── market_state.py          # 시장 상태 (인메모리)
+│   ├── market_state.py          # 시장 상태 모델
+│   ├── order_book.py            # 호가창 모델
+│   └── trade.py                 # 체결 모델
 ├── utils/
-│   ├── logger.py                # 비동기 로깅
-│   └── notifier.py              # 텔레그램 알림
-└── main.py                      # 실행 파일
+│   └── logger_utils.py          # 로깅
+├── main.py                      # 실행 파일 (V1)
+├── main_v2.py                   # 새로운 아키텍처 ✨ NEW
+├── ARCHITECTURE.md              # 아키텍처 문서 ✨ NEW
+└── QUICKSTART.md                # 빠른 시작 가이드 ✨ NEW
 ```
+
+## 새로운 아키텍처 (V2)
+
+### 핵심 개선 사항
+
+1. **데이터 검증 레이어** - 잘못된 데이터 필터링
+2. **데이터 정규화** - 일관된 데이터 포맷 및 추가 지표 계산
+3. **시장 상태 관리** - 실시간 시장 상태 추적 및 특징 계산
+4. **고속 저장소** - 시간 인덱싱 기반 빠른 조회
+5. **Auto Reconnection** - Exponential Backoff 재연결
+6. **구조화된 모니터링** - 체계적인 통계 및 메트릭
+
+### 실행 방법
+
+```bash
+# 의존성 설치
+pip install -r requirements.txt
+
+# 새로운 아키텍처로 실행 (권장)
+python main_v2.py
+
+# 기존 버전 실행
+python main.py
+```
+
+상세한 사용법은 [QUICKSTART.md](QUICKSTART.md)를 참고하세요.
+전체 아키텍처 설계는 [ARCHITECTURE.md](ARCHITECTURE.md)를 참고하세요.
 
 ---
 

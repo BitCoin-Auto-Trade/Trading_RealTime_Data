@@ -18,6 +18,7 @@ from config.settings import Settings
 from core.data_pipeline import DataPipeline
 from core.signal_engine_v1 import SignalEngine
 from core.market_state_manager import MarketState
+from core.data_reconciliation import DataReconciliation
 from data_collector.data_normalizer import NormalizedTrade, NormalizedOrderBook
 from utils.logger_utils import setup_logger
 
@@ -46,6 +47,12 @@ class TradingBot:
         # 시그널 엔진 (기존 로직 유지)
         self.signal_engine = SignalEngine()
 
+        # 데이터 검증 레이어 (WebSocket vs REST API)
+        self.reconciliation = DataReconciliation(
+            symbol=self.symbol,
+            reconciliation_interval=60  # 1분마다 검증
+        )
+
         # 포지션 상태
         self.current_position: Optional[str] = None  # None | "LONG" | "SHORT"
 
@@ -68,6 +75,9 @@ class TradingBot:
         signal = None
 
         if data_type == "trade":
+            # WebSocket 가격을 검증 레이어에 업데이트
+            self.reconciliation.update_ws_price(data.price)
+
             # 기존 시그널 엔진과 통합
             # (기존 SignalEngine은 Trade 객체를 받으므로 호환성 유지)
             signal = self.signal_engine.update_trade(self._to_legacy_trade(data))
@@ -95,7 +105,21 @@ class TradingBot:
         self.logger.info(f"대형거래: {state.large_trade_count}건")
         self.logger.info("=" * 60)
 
-        # TODO: OrderExecutor로 주문 실행
+        # ⚠️ 주문 실행 전 가격 재검증 (REST API)
+        is_valid, rest_price = await self.reconciliation.verify_before_order(
+            state.last_price
+        )
+
+        if not is_valid:
+            self.logger.error(
+                f"❌ 주문 취소: 가격 검증 실패 "
+                f"(WS: {state.last_price:,.2f}, REST: {rest_price:,.2f})"
+            )
+            return
+
+        self.logger.info(f"✅ 가격 검증 완료: {rest_price:,.2f}")
+
+        # TODO: OrderExecutor로 주문 실행 (rest_price 사용)
         self.current_position = signal
 
     async def _check_exit_signal(self, state: MarketState):
@@ -175,13 +199,23 @@ class TradingBot:
         self.logger.info(f"Position Size: {Settings.trading.position_size:,.0f}")
         self.logger.info("=" * 60)
 
+        # 데이터 검증 레이어 시작
+        await self.reconciliation.start()
+
         await self.pipeline.start()
 
     async def stop(self):
         """봇 종료"""
         self.logger.info("=" * 60)
         self.logger.info("🛑 Trading Bot Stopping")
+
+        # 검증 통계 출력
+        stats = self.reconciliation.get_stats()
+        self.logger.info(f"Reconciliation Stats: {stats}")
+
         self.logger.info("=" * 60)
+
+        await self.reconciliation.stop()
         await self.pipeline.stop()
 
     def get_stats(self) -> Dict[str, Any]:
@@ -196,7 +230,8 @@ class TradingBot:
             "market_state": self.pipeline.get_current_state(),
             "features": self.pipeline.get_features(),
             "storage": self.pipeline.get_storage_stats(),
-            "validation": self.pipeline.get_validation_stats()
+            "validation": self.pipeline.get_validation_stats(),
+            "reconciliation": self.reconciliation.get_stats()
         }
 
     def __repr__(self) -> str:

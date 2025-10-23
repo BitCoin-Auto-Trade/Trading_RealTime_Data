@@ -2,5 +2,6 @@ requests
 python-dotenv
 websockets
 sortedcontainers
+aiohttp
 pytest
 pytest-asyncio
